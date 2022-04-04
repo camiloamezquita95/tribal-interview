@@ -1,47 +1,81 @@
 {
-  "AWSTemplateFormatVersion": "2010-09-09",
-  "Transform": "AWS::Serverless-2016-10-31",
-  "Description": "An AWS Serverless Application.",
-  "Resources": {
-    "Get": {
-      "Type": "AWS::Serverless::Function",
-      "Properties": {
-        "PackageType": "Image",
-        "ImageConfig": {
-          "Command": [
-            "CreditLine::CreditLine.Functions::Get"
-          ]
-        },
-        "ImageUri": "",
-        "MemorySize": 256,
-        "Timeout": 30,
-        "Role": null,
-        "Policies": [
-          "AWSLambdaBasicExecutionRole"
-        ],
-        "Events": {
-          "RootGet": {
-            "Type": "Api",
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Transform": "AWS::Serverless-2016-10-31",
+    "Description": "An AWS Serverless Application.",
+    "Resources": {
+        "Get": {
+            "Type": "AWS::Serverless::Function",
             "Properties": {
-              "Path": "/",
-              "Method": "GET"
+                "FunctionName": "CreditLine",
+                "PackageType": "Image",
+                "ImageConfig": {
+                    "Command": [
+                    "CreditLine::CreditLine.Functions::Get"
+                    ]
+                },
+                "ImageUri": "",
+                "MemorySize": 128,
+                "Timeout": 30,
+                "Role": null,
+                "Policies": [
+                    "AWSLambdaBasicExecutionRole",
+                    {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                          {
+                            "Effect": "Allow",
+                            "Action": [
+                            "dynamodb:*",
+                            "dynamodb:DescribeTable"
+                            ],
+                            "Resource": { "Fn::GetAtt": [ "creditLineApplicationResultsDynamoDBTable", "Arn" ] }
+                          }
+                        ]
+                    }
+                ],
+                "Events": {
+                    "RootGet": {
+                        "Type": "Api",
+                        "Properties": {
+                            "Path": "/",
+                            "Method": "GET"
+                        }
+                    }
+                }
+            },
+            "Metadata": {
+                "Dockerfile": "Dockerfile",
+                "DockerContext": ".",
+                "DockerTag": ""
             }
-          }
+        },
+        "creditLineApplicationResultsDynamoDBTable" : {
+            "Type" : "AWS::DynamoDB::Table",
+            "Properties" : {
+                "TableName" : "credit-line-application-results",
+                "AttributeDefinitions" : [
+                    {
+                    "AttributeName" : "ApplicationId",
+                    "AttributeType" : "N"
+                    }
+                ],
+                "KeySchema" : [
+                    {
+                    "AttributeName" : "ApplicationId",
+                    "KeyType" : "HASH"
+                    }
+                ],
+                "ProvisionedThroughput" : {
+                    "ReadCapacityUnits" : "1",
+                    "WriteCapacityUnits" : "1"
+                }
+            }
         }
-      },
-      "Metadata": {
-        "Dockerfile": "Dockerfile",
-        "DockerContext": ".",
-        "DockerTag": ""
-      }
+    },
+    "Outputs" : {
+        "ApiURL" : {
+            "Description" : "API endpoint URL for Prod environment",
+            "Value" : { "Fn::Sub" : "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/" }
+        }
     }
-  },
-  "Outputs": {
-    "ApiURL": {
-      "Description": "API endpoint URL for Prod environment",
-      "Value": {
-        "Fn::Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
-      }
-    }
-  }
 }
