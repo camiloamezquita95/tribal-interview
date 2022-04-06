@@ -31,7 +31,7 @@ namespace CreditLine.Services
             return creditLineResult;
         }
 
-        private decimal GetRecommendedCreditLine(CreditLineInput creditLineInput)
+        public decimal GetRecommendedCreditLine(CreditLineInput creditLineInput)
         {
             decimal monthlyRevenueCreditLine = creditLineInput.MonthlyRevenue.Value / MONTHLY_REVENUE_CREDIT_LINE_RATIO;
 
@@ -49,13 +49,11 @@ namespace CreditLine.Services
 
         public async Task<CreditLineApplicationsInfo> ValidatePreviousRequests()
         {
-            String previousRequests = await dynamoDb.ScanCreditLineApplicationResultsAsync();
-            Console.WriteLine($"Previous Requests JSON: {previousRequests}");
-            List<CreditLineApplicationResult>? creditLineApplicationResults = JsonSerializer.Deserialize<List<CreditLineApplicationResult>>(previousRequests);
+            List<CreditLineApplicationResult> creditLineApplicationResults = await dynamoDb.ScanCreditLineApplicationResultsAsync();
 
             CreditLineApplicationsInfo creditLineApplicationsInfo = new CreditLineApplicationsInfo();
-            List<Document> acceptedApplications = dynamoDb.FindApplicationsByStatus(ACCEPTED_APPLICATION_STATUS);
-            List<Document> failedApplications = dynamoDb.FindApplicationsByStatus(FAILED_APPLICATION_STATUS);
+            List<CreditLineApplicationResult> acceptedApplications = dynamoDb.FindApplicationsByStatus(ACCEPTED_APPLICATION_STATUS);
+            List<CreditLineApplicationResult> failedApplications = dynamoDb.FindApplicationsByStatus(FAILED_APPLICATION_STATUS);
 
             creditLineApplicationsInfo.AcceptedApplicationExist = acceptedApplications.Count() > 0;
             creditLineApplicationsInfo.AcceptedApplication = acceptedApplications.Count() > 0 ? acceptedApplications[0] : null;
@@ -77,22 +75,17 @@ namespace CreditLine.Services
             return creditLineApplicationsInfo;
         }
 
-        public async Task<string> SaveAcceptedCreditLine(Document acceptedCreditLine)
+        public async Task<string> SaveAcceptedCreditLine(CreditLineApplicationResult acceptedCreditLine)
         {
+            int applicationId = await dynamoDb.GetNextApplicationId();
+            acceptedCreditLine.ApplicationId = applicationId;
             String createdItem = await dynamoDb.WriteCreditLineApplicationResultsAsync(acceptedCreditLine);
             return createdItem;
         }
 
         public async Task<string> SaveCreditLineApplicationResult(CreditLineInput creditLineInput, CreditLineOutput creditLineOutput)
         {
-            String previousRequests = await dynamoDb.ScanCreditLineApplicationResultsAsync();
-            List<CreditLineApplicationResult>? creditLineApplicationResults = JsonSerializer.Deserialize<List<CreditLineApplicationResult>>(previousRequests);
-            int applicationId = 1;
-            if(creditLineApplicationResults != null)
-            {
-                applicationId = creditLineApplicationResults.Count() + 1;
-            }
-
+            int applicationId = await dynamoDb.GetNextApplicationId();
             CreditLineApplicationResult creditLineApplicationResult = new CreditLineApplicationResult()
             {
                 ApplicationId = applicationId,

@@ -1,7 +1,6 @@
 ﻿using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
-using Amazon.DynamoDBv2.Model;
 using CreditLine.Model.Entities;
 using System.Text.Json;
 
@@ -10,7 +9,7 @@ namespace CreditLine.Infrastructure.Repo
     public class DynamoDBRepo
     {
 
-        public async Task<string> ScanCreditLineApplicationResultsAsync()
+        public async Task<List<CreditLineApplicationResult>> ScanCreditLineApplicationResultsAsync()
         {
             using var client = new AmazonDynamoDBClient(Amazon.RegionEndpoint.USEast1);
             DynamoDBContext context = new DynamoDBContext(client);
@@ -18,8 +17,8 @@ namespace CreditLine.Infrastructure.Repo
             var scanOps = new ScanOperationConfig();
             var results = table.Scan(scanOps);
             List<Document> data = await results.GetNextSetAsync();
-            IEnumerable<CreditLineApplicationResult> items = context.FromDocuments<CreditLineApplicationResult>(data);
-            return JsonSerializer.Serialize(items);
+            List<CreditLineApplicationResult> items = context.FromDocuments<CreditLineApplicationResult>(data).ToList();
+            return items;
         }
 
         public async Task<string> WriteCreditLineApplicationResultsAsync(CreditLineApplicationResult creditLineApplicationResult)
@@ -29,19 +28,19 @@ namespace CreditLine.Infrastructure.Repo
 
             Document item = new Document();
             item["ApplicationId"] = creditLineApplicationResult.ApplicationId;
-            item["foundingType"] = creditLineApplicationResult.FoundingType;
-            item["cashBalance"] = creditLineApplicationResult.CashBalance;
-            item["monthlyRevenue"] = creditLineApplicationResult.MonthlyRevenue;
-            item["requestedCreditLine"] = creditLineApplicationResult.RequestedCreditLine;
-            item["requestedDate"] = creditLineApplicationResult.RequestedDate;
-            item["systemDate"] = DateTime.Now;
-            item["isTheCreditLineAccepted"] = creditLineApplicationResult.IsTheCreditLineAccepted;
-            item["authorizedCreditLine"] = creditLineApplicationResult.AuthorizedCreditLine;
-            item["status"] = creditLineApplicationResult.Status;
+            item["FoundingType"] = creditLineApplicationResult.FoundingType;
+            item["CashBalance"] = creditLineApplicationResult.CashBalance;
+            item["MonthlyRevenue"] = creditLineApplicationResult.MonthlyRevenue;
+            item["RequestedCreditLine"] = creditLineApplicationResult.RequestedCreditLine;
+            item["RequestedDate"] = creditLineApplicationResult.RequestedDate;
+            item["SystemDate"] = DateTime.Now;
+            item["IsTheCreditLineAccepted"] = creditLineApplicationResult.IsTheCreditLineAccepted;
+            item["AuthorizedCreditLine"] = creditLineApplicationResult.AuthorizedCreditLine;
+            item["Status"] = creditLineApplicationResult.Status;
 
             var response = await table.PutItemAsync(item);
 
-            return JsonSerializer.Serialize(item);
+            return JsonSerializer.Serialize(creditLineApplicationResult);
         }
 
         public async Task<string> WriteCreditLineApplicationResultsAsync(Document creditLineApplicationResult)
@@ -53,16 +52,30 @@ namespace CreditLine.Infrastructure.Repo
             return JsonSerializer.Serialize(creditLineApplicationResult);
         }
 
-        public List<Document> FindApplicationsByStatus(string status)
+        public List<CreditLineApplicationResult> FindApplicationsByStatus(string status)
         {
+
             using var client = new AmazonDynamoDBClient(Amazon.RegionEndpoint.USEast1);
+            DynamoDBContext context = new DynamoDBContext(client);
             Table table = Table.LoadTable(client, "credit-line-application-results");
-
+            var scanOps = new ScanOperationConfig();
             ScanFilter scanFilter = new ScanFilter();
-            scanFilter.AddCondition("status", ScanOperator.Equal, status);
+            scanFilter.AddCondition("Status", ScanOperator.Equal, status);
+            var results = table.Scan(scanFilter);
+            List<Document> data = results.GetNextSetAsync().Result;
+            List<CreditLineApplicationResult> items = context.FromDocuments<CreditLineApplicationResult>(data).ToList();
+            return items;
+        }
 
-            Search search = table.Scan(scanFilter);
-            return search.Matches;                        
-        }        
+        public async Task<int> GetNextApplicationId()
+        {
+            List<CreditLineApplicationResult> creditLineApplicationResults = await ScanCreditLineApplicationResultsAsync();
+            int applicationId = 1;
+            if (creditLineApplicationResults != null)
+            {
+                applicationId = creditLineApplicationResults.Count() + 1;
+            }
+            return applicationId;
+        }
     }
 }

@@ -13,7 +13,8 @@ namespace CreditLine;
 
 public class Functions
 {
-
+    public static string APPLICATION_REJECTED_MESSAGE = "Application Rejected";
+    public static string APPLICATION_REJECTED_TOO_MANY_REQUESTS_MESSAGE = "Application Rejected, wait 30 seconds to send a new request";
     public static string FAILED_MESSAGE = "A sales agent will contact you";
     /// <summary>
     /// Default constructor that Lambda will invoke.
@@ -21,7 +22,6 @@ public class Functions
     public Functions()
     {
     }
-
 
     /// <summary>
     /// A Lambda function to process credit line applications
@@ -31,13 +31,14 @@ public class Functions
     public APIGatewayProxyResponse Get(CreditLineInput creditLineInput, ILambdaContext context)
     {
         ValidatorService validatorService = new ValidatorService();
+        var headers = new Dictionary<string, string>() { { "Content-Type", "application/json" } };
 
         if(!validatorService.ValidateCreditLineInput(creditLineInput))
         {
             return new APIGatewayProxyResponse()
             {
                 StatusCode = (int)HttpStatusCode.BadRequest,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                Headers = headers
             };
         }
 
@@ -52,7 +53,7 @@ public class Functions
                 return new APIGatewayProxyResponse()
                 {
                     StatusCode = (int)HttpStatusCode.TooManyRequests,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                    Headers = headers
                 };
             }
             else
@@ -60,9 +61,9 @@ public class Functions
                 string savedItem = creditLineService.SaveAcceptedCreditLine(creditLineApplicationsInfo.AcceptedApplication).Result;
                 return new APIGatewayProxyResponse()
                 {
-                    StatusCode = (int)HttpStatusCode.TooManyRequests,
+                    StatusCode = (int)HttpStatusCode.OK,
                     Body = savedItem,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                    Headers = headers
                 };
             }
         }
@@ -73,7 +74,8 @@ public class Functions
                 return new APIGatewayProxyResponse()
                 {
                     StatusCode = (int)HttpStatusCode.TooManyRequests,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                    Body = APPLICATION_REJECTED_TOO_MANY_REQUESTS_MESSAGE,
+                    Headers = headers
                 };
             }
             else
@@ -84,7 +86,7 @@ public class Functions
                     {
                         StatusCode = (int)HttpStatusCode.TooManyRequests,
                         Body = FAILED_MESSAGE,
-                        Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                        Headers = headers
                     };
                 }
             }
@@ -94,13 +96,26 @@ public class Functions
         CreditLineOutput creditLineResult = creditLineService.GetCreditLineResult(creditLineInput);
         string savedItemResult = creditLineService.SaveCreditLineApplicationResult(creditLineInput, creditLineResult).Result;
 
-        var response = new APIGatewayProxyResponse
+        if (creditLineResult.IsTheCreditLineAccepted)
         {
-            StatusCode = (int)HttpStatusCode.OK,
-            Body = JsonSerializer.Serialize<CreditLineOutput>(creditLineResult),
-            Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-        };
+            var response = new APIGatewayProxyResponse
+            {
+                StatusCode = (int)HttpStatusCode.OK,
+                Body = JsonSerializer.Serialize<CreditLineOutput>(creditLineResult),
+                Headers = headers
+            };
+            return response;
+        }
+        else
+        {
+            var response = new APIGatewayProxyResponse
+            {
+                StatusCode = (int)HttpStatusCode.OK,
+                Body = APPLICATION_REJECTED_MESSAGE,
+                Headers = headers
+            };
+            return response;
+        }
 
-        return response;
     }
 }
